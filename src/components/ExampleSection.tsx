@@ -1,11 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import MathView from './MathView';
-import { Gauge, Check, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Gauge, Check, HelpCircle, ChevronDown, ChevronUp, Crosshair } from 'lucide-react';
+
+interface PointData {
+  t: number;
+  v: number;
+  label?: string;
+  isQuestionTarget?: boolean;
+}
 
 export const ExampleSection: React.FC = () => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showSolution, setShowSolution] = useState<boolean>(false);
   const [testSpeed, setTestSpeed] = useState<number>(90);
+  const [activePoint, setActivePoint] = useState<PointData | null>(null);
+  const [showTargetOnGraph, setShowTargetOnGraph] = useState<boolean>(false);
+  const clipId = useId();
 
   const options = [
     { id: 'EE', label: '30 menit', isCorrect: false },
@@ -19,6 +29,52 @@ export const ExampleSection: React.FC = () => {
   const calculatedHours = 60 / testSpeed;
   const calculatedMinutes = (calculatedHours * 60).toFixed(1);
 
+  // Titik acuan sesuai buku cetak: (t, v) di mana v = 60 / t
+  const referencePoints: PointData[] = [
+    { t: 1, v: 60, label: '(1, 60)' },
+    { t: 2, v: 30, label: '(2, 30)' },
+    { t: 3, v: 20, label: '(3, 20)' },
+    { t: 4, v: 15, label: '(4, 15)' },
+    { t: 5, v: 12, label: '(5, 12)' },
+    { t: 6, v: 10, label: '(6, 10)' },
+  ];
+
+  // Titik target dari Soal 6: v = 90 km/jam -> t = 60/90 = 2/3 jam = 40 menit
+  const targetPoint: PointData = {
+    t: 2 / 3,
+    v: 90,
+    label: '(2/3 jam, 90)',
+    isQuestionTarget: true,
+  };
+
+  // Dimensi SVG & Skala Matematis Presisi
+  const width = 480;
+  const height = 370;
+  const padding = { top: 40, right: 35, bottom: 65, left: 65 };
+  const graphWidth = width - padding.left - padding.right;
+  const graphHeight = height - padding.top - padding.bottom;
+
+  // Rentang nilai koordinat (menyesuaikan jika menampilkan titik target 90 km/jam)
+  const maxT = 7;
+  const maxV = showTargetOnGraph ? 100 : 75;
+
+  const scaleX = (t: number) => padding.left + (t / maxT) * graphWidth;
+  const scaleY = (v: number) => height - padding.bottom - (v / maxV) * graphHeight;
+
+  // Generate kurva hiperbola v = 60 / t secara matematis presisi
+  const curvePoints: string[] = [];
+  const tMin = 60 / (maxV - 2); // Mulai sesaat sebelum batas atas
+  const tMax = 6.7;
+  const numSteps = 120;
+  for (let i = 0; i <= numSteps; i++) {
+    const t = tMin + (i / numSteps) * (tMax - tMin);
+    const v = 60 / t;
+    curvePoints.push(`${scaleX(t).toFixed(2)},${scaleY(v).toFixed(2)}`);
+  }
+  const curvePathD = `M ${curvePoints.join(' L ')}`;
+
+  const currentPoints = showTargetOnGraph ? [...referencePoints, targetPoint] : referencePoints;
+
   return (
     <section id="contoh" className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 md:p-8">
@@ -30,74 +86,252 @@ export const ExampleSection: React.FC = () => {
           Contoh Soal 6: Grafik Perjalanan Menggunakan Mobil
         </h2>
         <p className="mt-2 text-slate-600 text-sm md:text-base">
-          Perhatikan grafik hubungan antara kecepatan rata-rata mobil (<MathView math="v" />, km/jam) dan waktu perjalanan (<MathView math="t" />, jam) pada lintasan dengan jarak tetap berikut.
+          Perhatikan grafik kurva hiperbola antara kecepatan rata-rata mobil (<MathView math="v" />, km/jam) dan waktu tempuh (<MathView math="t" />, jam) pada jarak tetap <MathView math="s = 60 \text{ km}" /> berikut.
         </p>
 
         {/* Visualisasi Grafik Mobil & Soal */}
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          {/* Grafik SVG Representatif */}
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Grafik SVG Representatif Presisi Tinggi */}
           <div className="lg:col-span-6 bg-slate-900 p-4 rounded-xl shadow-inner flex flex-col items-center">
-            <div className="w-full text-center text-xs text-slate-400 font-mono mb-2">
-              Grafik Hubungan Kecepatan vs Waktu (Jarak Tempuh s = 60 km)
+            <div className="w-full flex items-center justify-between text-xs text-slate-400 font-mono mb-2 px-1">
+              <span>Kurva Hiperbola: <MathView math="v \cdot t = 60 \text{ km}" /></span>
+              <button
+                onClick={() => setShowTargetOnGraph(!showTargetOnGraph)}
+                className={`px-2 py-0.5 rounded text-[11px] font-sans font-semibold transition-colors cursor-pointer ${
+                  showTargetOnGraph
+                    ? 'bg-amber-400 text-slate-950 font-bold'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                }`}
+                title="Tampilkan titik target soal 90 km/jam pada grafik"
+              >
+                {showTargetOnGraph ? '✓ Titik Soal (90 km/jam)' : '+ Titik Soal (90 km/jam)'}
+              </button>
             </div>
-            <svg viewBox="0 0 400 280" className="w-full max-w-[360px] h-auto select-none">
-              {/* Axes */}
-              <line x1="50" y1="240" x2="380" y2="240" stroke="#cbd5e1" strokeWidth="2" />
-              <line x1="50" y1="240" x2="50" y2="20" stroke="#cbd5e1" strokeWidth="2" />
-              
-              {/* Axis Labels */}
-              <text x="380" y="260" fill="#94a3b8" fontSize="11" textAnchor="end">Waktu (t, jam)</text>
-              <text x="50" y="16" fill="#94a3b8" fontSize="11" textAnchor="start">Kecepatan (v, km/jam)</text>
 
-              {/* Grid & Reference ticks */}
-              {[1, 2, 3, 4, 5, 6].map((hour) => {
-                const xPos = 50 + (hour / 7) * 310;
-                return (
-                  <g key={`tick-h-${hour}`}>
-                    <line x1={xPos} y1="240" x2={xPos} y2="245" stroke="#94a3b8" />
-                    <text x={xPos} y="258" fill="#94a3b8" fontSize="10" textAnchor="middle">{hour}</text>
-                  </g>
-                );
-              })}
+            <div className="w-full overflow-x-auto">
+              <svg viewBox={`0 0 ${width} ${height}`} className="w-full max-w-[460px] h-auto mx-auto select-none">
+                <defs>
+                  <clipPath id={clipId}>
+                    <rect
+                      x={padding.left}
+                      y={padding.top}
+                      width={graphWidth}
+                      height={graphHeight}
+                    />
+                  </clipPath>
+                </defs>
 
-              {[10, 12, 15, 20, 30, 60].map((v) => {
-                const yPos = 240 - (v / 70) * 210;
-                return (
-                  <g key={`tick-v-${v}`}>
-                    <line x1="45" y1={yPos} x2="50" y2={yPos} stroke="#94a3b8" />
-                    <text x="40" y={yPos + 4} fill="#94a3b8" fontSize="10" textAnchor="end">{v}</text>
-                  </g>
-                );
-              })}
+                {/* Sumbu X dan Sumbu Y */}
+                <line
+                  x1={padding.left}
+                  y1={height - padding.bottom}
+                  x2={width - padding.right + 15}
+                  y2={height - padding.bottom}
+                  stroke="#cbd5e1"
+                  strokeWidth="2"
+                />
+                <line
+                  x1={padding.left}
+                  y1={height - padding.bottom}
+                  x2={padding.left}
+                  y2={padding.top - 15}
+                  stroke="#cbd5e1"
+                  strokeWidth="2"
+                />
 
-              {/* Kurva hiperbola v * t = 60 */}
-              <path
-                d="M 94,60 C 138,150 183,180 315,222"
-                fill="none"
-                stroke="#38bdf8"
-                strokeWidth="3"
-              />
+                {/* Grid Horisontal & Label Sumbu Y Utama */}
+                {(showTargetOnGraph ? [20, 40, 60, 80, 100] : [10, 20, 30, 40, 50, 60, 70]).map((v) => {
+                  const yPos = scaleY(v);
+                  return (
+                    <g key={`grid-v-${v}`}>
+                      <line
+                        x1={padding.left}
+                        y1={yPos}
+                        x2={width - padding.right}
+                        y2={yPos}
+                        stroke="#334155"
+                        strokeDasharray="2,2"
+                        strokeWidth="0.7"
+                      />
+                      <line
+                        x1={padding.left - 4}
+                        y1={yPos}
+                        x2={padding.left}
+                        y2={yPos}
+                        stroke="#94a3b8"
+                        strokeWidth="1.2"
+                      />
+                      <text
+                        x={padding.left - 8}
+                        y={yPos + 4}
+                        fill="#94a3b8"
+                        fontSize="10"
+                        textAnchor="end"
+                        fontFamily="monospace"
+                      >
+                        {v}
+                      </text>
+                    </g>
+                  );
+                })}
 
-              {/* Dotted lines untuk titik referensi */}
-              {[
-                { t: 1, v: 60 },
-                { t: 2, v: 30 },
-                { t: 3, v: 20 },
-                { t: 6, v: 10 },
-              ].map((pt, i) => {
-                const xPos = 50 + (pt.t / 7) * 310;
-                const yPos = 240 - (pt.v / 70) * 210;
-                return (
-                  <g key={`dot-${i}`}>
-                    <line x1={xPos} y1="240" x2={xPos} y2={yPos} stroke="#475569" strokeDasharray="2,2" />
-                    <line x1="50" y1={yPos} x2={xPos} y2={yPos} stroke="#475569" strokeDasharray="2,2" />
-                    <circle cx={xPos} cy={yPos} r="4" fill="#38bdf8" />
-                  </g>
-                );
-              })}
-            </svg>
-            <div className="mt-2 text-[11px] text-slate-400">
-              Perhatikan pasangan koordinat: <span className="text-sky-300">(1, 60), (2, 30), (3, 20), (6, 10)</span>.
+                {/* Grid Vertikal & Ticks Sumbu X (0 - 6 jam) */}
+                {[0, 1, 2, 3, 4, 5, 6].map((hour) => {
+                  const xPos = scaleX(hour);
+                  return (
+                    <g key={`tick-h-${hour}`}>
+                      <line
+                        x1={xPos}
+                        y1={padding.top}
+                        x2={xPos}
+                        y2={height - padding.bottom}
+                        stroke="#334155"
+                        strokeDasharray="2,2"
+                        strokeWidth="0.7"
+                      />
+                      <line
+                        x1={xPos}
+                        y1={height - padding.bottom}
+                        x2={xPos}
+                        y2={height - padding.bottom + 5}
+                        stroke="#94a3b8"
+                        strokeWidth="1.2"
+                      />
+                      <text
+                        x={xPos}
+                        y={height - padding.bottom + 18}
+                        fill="#94a3b8"
+                        fontSize="11"
+                        textAnchor="middle"
+                        fontFamily="monospace"
+                        fontWeight="600"
+                      >
+                        {hour}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {/* Label Sumbu (Diposisikan Aman Tanpa Menabrak Angka) */}
+                <text
+                  x={padding.left + graphWidth / 2}
+                  y={height - 12}
+                  fill="#f8fafc"
+                  fontSize="12"
+                  fontWeight="600"
+                  textAnchor="middle"
+                >
+                  Waktu Perjalanan (t, jam) →
+                </text>
+                <text
+                  x={padding.left - 10}
+                  y={padding.top - 15}
+                  fill="#f8fafc"
+                  fontSize="12"
+                  fontWeight="600"
+                  textAnchor="start"
+                >
+                  ↑ Kecepatan (v, km/jam)
+                </text>
+
+                {/* Kurva Hiperbola Matematik v = 60 / t */}
+                <g clipPath={`url(#${clipId})`}>
+                  <path
+                    d={curvePathD}
+                    fill="none"
+                    stroke="#38bdf8"
+                    strokeWidth="3.2"
+                    strokeLinecap="round"
+                  />
+                </g>
+
+                {/* Garis Proyeksi Dotted untuk Setiap Titik Koordinat */}
+                {currentPoints.map((pt) => {
+                  const xPos = scaleX(pt.t);
+                  const yPos = scaleY(pt.v);
+                  const isActive = activePoint?.t === pt.t;
+
+                  return (
+                    <g key={`proj-${pt.t}-${pt.v}`}>
+                      {/* Garis putus-putus ke sumbu X */}
+                      <line
+                        x1={xPos}
+                        y1={height - padding.bottom}
+                        x2={xPos}
+                        y2={yPos}
+                        stroke={pt.isQuestionTarget ? '#fbbf24' : isActive ? '#10b981' : '#64748b'}
+                        strokeDasharray="3,3"
+                        strokeWidth={isActive || pt.isQuestionTarget ? '1.8' : '1'}
+                      />
+                      {/* Garis putus-putus ke sumbu Y */}
+                      <line
+                        x1={padding.left}
+                        y1={yPos}
+                        x2={xPos}
+                        y2={yPos}
+                        stroke={pt.isQuestionTarget ? '#fbbf24' : isActive ? '#10b981' : '#64748b'}
+                        strokeDasharray="3,3"
+                        strokeWidth={isActive || pt.isQuestionTarget ? '1.8' : '1'}
+                      />
+                    </g>
+                  );
+                })}
+
+                {/* Titik-Titik Koordinat (Presisi 100% pada Kurva) */}
+                {currentPoints.map((pt) => {
+                  const xPos = scaleX(pt.t);
+                  const yPos = scaleY(pt.v);
+                  const isActive = activePoint?.t === pt.t;
+
+                  return (
+                    <g
+                      key={`pt-${pt.t}-${pt.v}`}
+                      className="cursor-pointer"
+                      onClick={() => setActivePoint(pt)}
+                      onMouseEnter={() => setActivePoint(pt)}
+                    >
+                      {/* Lingkaran Titik Luar (Glow saat aktif) */}
+                      <circle
+                        cx={xPos}
+                        cy={yPos}
+                        r={pt.isQuestionTarget ? '7' : isActive ? '6.5' : '5'}
+                        fill={pt.isQuestionTarget ? '#fbbf24' : isActive ? '#10b981' : '#38bdf8'}
+                        stroke="#ffffff"
+                        strokeWidth={isActive || pt.isQuestionTarget ? '2.5' : '1.8'}
+                      />
+
+                      {/* Label Teks Koordinat di Samping Titik */}
+                      <text
+                        x={xPos + (pt.t < 2 ? 8 : pt.t > 4 ? -8 : 8)}
+                        y={yPos + (pt.t > 4 ? -10 : -8)}
+                        fill={pt.isQuestionTarget ? '#fef08a' : isActive ? '#6ee7b7' : '#e2e8f0'}
+                        fontSize="10"
+                        fontWeight="bold"
+                        textAnchor={pt.t > 4 ? 'end' : 'start'}
+                        className="pointer-events-none drop-shadow-sm"
+                      >
+                        {pt.label}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+
+            {/* Info Titik Aktif / Tooltip */}
+            <div className="w-full mt-3 p-2.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-xs text-slate-300 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Crosshair className="w-4 h-4 text-sky-400 shrink-0" />
+                <span>
+                  {activePoint ? (
+                    <span>
+                      Titik Aktif: <strong className="text-white">v = {activePoint.v} km/jam</strong>, waktu = <strong className="text-white">{activePoint.t === 2/3 ? '40 menit (2/3 jam)' : `${activePoint.t} jam`}</strong> → <span className="text-emerald-400 font-mono">v × t = 60 km</span>
+                    </span>
+                  ) : (
+                    <span>Arahkan kursor atau klik sembarang titik pada kurva untuk memeriksa hasil kali.</span>
+                  )}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -105,7 +339,7 @@ export const ExampleSection: React.FC = () => {
           <div className="lg:col-span-6 space-y-4">
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
               <p className="font-semibold text-slate-900 text-base leading-relaxed">
-                Soal 6: Berdasarkan grafik di atas, jika kecepatan rata-rata mobil ditingkatkan menjadi <span className="text-indigo-600 font-bold">90 km/jam</span>, maka waktu perjalanan yang ditempuh mobil tersebut adalah ....
+                Soal 6: Berdasarkan grafik di samping, jika kecepatan rata-rata mobil ditingkatkan menjadi <span className="text-indigo-600 font-bold">90 km/jam</span>, maka waktu perjalanan yang ditempuh mobil tersebut adalah ....
               </p>
             </div>
 
@@ -120,8 +354,8 @@ export const ExampleSection: React.FC = () => {
                   let btnStyle = "border-slate-200 bg-white hover:border-indigo-300 text-slate-700";
                   if (isChecked) {
                     btnStyle = isCorrect
-                      ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-semibold"
-                      : "border-rose-400 bg-rose-50 text-rose-800";
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-semibold ring-1 ring-emerald-500"
+                      : "border-rose-400 bg-rose-50 text-rose-800 ring-1 ring-rose-400";
                   }
 
                   return (
@@ -130,8 +364,9 @@ export const ExampleSection: React.FC = () => {
                       onClick={() => {
                         setSelectedOption(opt.id);
                         if (!showSolution) setShowSolution(true);
+                        if (opt.isCorrect) setShowTargetOnGraph(true);
                       }}
-                      className={`flex items-center justify-between p-3 rounded-xl border text-sm text-left transition-all ${btnStyle}`}
+                      className={`flex items-center justify-between p-3 rounded-xl border text-sm text-left transition-all cursor-pointer ${btnStyle}`}
                     >
                       <span>
                         <strong className="mr-2 text-indigo-600">({opt.id})</strong> {opt.label}
@@ -147,7 +382,7 @@ export const ExampleSection: React.FC = () => {
             <div className="pt-2">
               <button
                 onClick={() => setShowSolution(!showSolution)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-semibold text-sm transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-semibold text-sm transition-colors cursor-pointer"
               >
                 <HelpCircle className="w-4 h-4" />
                 <span>{showSolution ? 'Sembunyikan Pembahasan Formal' : 'Lihat Pembahasan Lengkap SMA'}</span>
